@@ -59,6 +59,7 @@
   copy: src=docker-thinpool.profile
         dest=/etc/lvm/profile/
         owner=root group=root mode=0644
+  register: docker_lvm_profile
   when: docker_storage_size != false
 
 - name: Docker - Create /etc/docker directory if it doesnt exist
@@ -73,7 +74,9 @@
 
 - name: Docker - Apply new docker storage LVM profile
   command: lvchange --metadataprofile docker-thinpool docker/thinpool
-  when: docker_storage_size != false
+  when:
+    - docker_lvm_profile.changed
+    - docker_storage_size != false
 
 - name: Docker - Enable service and start docker service
   service: name=docker enabled=yes state=started
