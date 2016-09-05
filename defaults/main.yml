@@ -1,4 +1,4 @@
-docker_storage_type: image
-docker_storage_device: /dev/docker_storage0
+docker_storage_type: "image"
+docker_storage_device: "/dev/loop0"
 docker_storage_location: /docker
 docker_storage_size: 20480
