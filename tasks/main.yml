@@ -51,40 +51,56 @@
 
 - name: Docker - Create docker LVM thinpool
   lvol: vg=docker lv=thinpool size=95%VG opts='--wipesignatures y'
-  when: docker_storage_size != false
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Create docker LVM thinpoolmeta
   lvol: vg=docker lv=thinpoolmeta size=1%VG opts='--wipesignatures y'
-  when: docker_storage_size != false
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Convert docker storage pool to thinpool
   command: lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
   when:
     - allocate_docker_storage.changed
-    - docker_storage_size != false
+    - docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Create docker thinpool LVM profile
   copy: src=docker-thinpool.profile
         dest=/etc/lvm/profile/
         owner=root group=root mode=0644
   register: docker_lvm_profile
-  when: docker_storage_size != false
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Create /etc/docker directory if it doesnt exist
   file: path=/etc/docker state=directory mode=0755
-  when: docker_storage_size != false
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Copy docker daemon configuration file
   copy: src=daemon.json
         dest=/etc/docker/daemon.json
         owner=root group=root mode=0644
-  when: docker_storage_size != false
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Apply new docker storage LVM profile
   command: lvchange --metadataprofile docker-thinpool docker/thinpool
   when:
     - docker_lvm_profile.changed
-    - docker_storage_size != false
+    - docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Enable service and start docker service
   service: name=docker enabled=yes state=started
+  tags:
+    - docker
