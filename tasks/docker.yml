@@ -20,26 +20,34 @@
     dd if=/dev/zero of={{ docker_storage_location }} count={{ docker_storage_size }} bs=1MiB creates={{ docker_storage_location }}
   register: allocate_docker_storage
   when:
-    - docker_storage_size != false
+    - docker_storage_size|default(False)
     - docker_storage_type != "disk"
+  tags:
+    - docker
 
 - name: Docker - Set docker storage IMG permissions
   file: path={{ docker_storage_location }} mode=600
   when:
-    - docker_storage_size != false
+    - docker_storage_size|default(False)
     - docker_storage_type != "disk"
+  tags:
+    - docker
 
 - name: Docker - Setup docker loop storage device
   command: losetup {{ docker_storage_device }} {{ docker_storage_location }}
   register: setup_docker_storage
   when:
     - allocate_docker_storage.changed
-    - docker_storage_size != false
+    - docker_storage_size|default(False)
     - docker_storage_type != "disk"
+  tags:
+    - docker
 
 - name: Docker - Create docker LVM PV and VG
   lvg: vg=docker pvs={{ docker_storage_device }}
-  when: docker_storage_size != false
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Create docker LVM thinpool
   lvol: vg=docker lv=thinpool size=95%VG opts='--wipesignatures y'
