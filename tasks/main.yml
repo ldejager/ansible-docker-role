@@ -21,7 +21,7 @@
   register: allocate_docker_storage
   when:
     - docker_storage_size != false
-    - docker_storage_type != disk
+    - docker_storage_type != "disk"
 
 - name: Docker - Set docker storage IMG permissions
   file: path={{ docker_storage_location }} mode=600
