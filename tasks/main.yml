@@ -5,7 +5,7 @@
         owner=root group=root mode=0644
 
 - name: Docker - Install docker packages
-  sudo: yes
+  become: true
   yum:
     name: "{{ item }}"
     state: latest
@@ -20,57 +20,87 @@
     dd if=/dev/zero of={{ docker_storage_location }} count={{ docker_storage_size }} bs=1MiB creates={{ docker_storage_location }}
   register: allocate_docker_storage
   when:
-    - docker_storage_size != false
+    - docker_storage_size|default(False)
     - docker_storage_type != "disk"
+  tags:
+    - docker
 
 - name: Docker - Set docker storage IMG permissions
   file: path={{ docker_storage_location }} mode=600
   when:
-    - docker_storage_size != false
-    - docker_storage_type != disk
+    - docker_storage_size|default(False)
+    - docker_storage_type != "disk"
+  tags:
+    - docker
 
 - name: Docker - Setup docker loop storage device
   command: losetup {{ docker_storage_device }} {{ docker_storage_location }}
   register: setup_docker_storage
   when:
-    - docker_storage_size != false
-    - docker_storage_type != disk
+    - allocate_docker_storage.changed
+    - docker_storage_size|default(False)
+    - docker_storage_type != "disk"
+  tags:
+    - docker
 
-- name: Docker - Create docker LVM PV
-  command: pvcreate {{ docker_storage_device }}
-  when: docker_storage_size != false
-
-- name: Docker - Create docker LVM VG
-  command: vgcreate docker {{ docker_storage_device }}
-  when: docker_storage_size != false
+- name: Docker - Create docker LVM PV and VG
+  lvg: vg=docker pvs={{ docker_storage_device }}
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Create docker LVM thinpool
-  command: lvcreate --wipesignatures y -n thinpool docker -l 95%VG
-  when: docker_storage_size != false
+  lvol: vg=docker lv=thinpool size=95%VG opts='--wipesignatures y'
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Create docker LVM thinpoolmeta
-  command: lvcreate --wipesignatures y -n thinpoolmeta docker -l 1%VG
-  when: docker_storage_size != false
+  lvol: vg=docker lv=thinpoolmeta size=1%VG opts='--wipesignatures y'
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Convert docker storage pool to thinpool
   command: lvconvert -y --zero n -c 512K --thinpool docker/thinpool --poolmetadata docker/thinpoolmeta
-  when: docker_storage_size != false
+  when:
+    - allocate_docker_storage.changed
+    - docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Create docker thinpool LVM profile
   copy: src=docker-thinpool.profile
         dest=/etc/lvm/profile/
         owner=root group=root mode=0644
-  when: docker_storage_size != false
+  register: docker_lvm_profile
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
+
+- name: Docker - Create /etc/docker directory if it doesnt exist
+  file: path=/etc/docker state=directory mode=0755
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Copy docker daemon configuration file
   copy: src=daemon.json
-        dest=/etc/docker
+        dest=/etc/docker/daemon.json
         owner=root group=root mode=0644
-  when: docker_storage_size != false
+  when: docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Apply new docker storage LVM profile
   command: lvchange --metadataprofile docker-thinpool docker/thinpool
-  when: docker_storage_size != false
+  when:
+    - docker_lvm_profile.changed
+    - docker_storage_size|default(False)
+  tags:
+    - docker
 
 - name: Docker - Enable service and start docker service
   service: name=docker enabled=yes state=started
+  tags:
+    - docker
